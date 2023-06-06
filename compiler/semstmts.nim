@@ -1872,12 +1872,13 @@ proc semOverride(c: PContext, s: PSym, n: PNode) =
   let name = s.name.s.normalize
   case name
   of "=destroy":
-    bindTypeHook(c, s, n, attachedDestructor)
-    if s.ast != nil:
-      if s.ast[pragmasPos].kind == nkEmpty:
-        s.ast[pragmasPos] = newNodeI(nkPragma, s.info)
-      s.ast[pragmasPos].add newTree(nkExprColonExpr,
-          newIdentNode(c.cache.getIdent("raises"),  s.info), newNodeI(nkBracket, s.info))
+    if s.magic != mDestroy:
+      bindTypeHook(c, s, n, attachedDestructor)
+      if s.ast != nil:
+        if s.ast[pragmasPos].kind == nkEmpty:
+          s.ast[pragmasPos] = newNodeI(nkPragma, s.info)
+        s.ast[pragmasPos].add newTree(nkExprColonExpr,
+            newIdentNode(c.cache.getIdent("raises"),  s.info), newNodeI(nkBracket, s.info))
   of "deepcopy", "=deepcopy":
     if s.typ.len == 2 and
         s.typ[1].skipTypes(abstractInst).kind in {tyRef, tyPtr} and
