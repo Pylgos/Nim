@@ -66,8 +66,17 @@ proc newFastMoveStmt*(g: ModuleGraph, le, ri: PNode): PNode =
   result = newNodeI(nkFastAsgn, le.info, 2)
   result[0] = le
   result[1] = newNodeIT(nkCall, ri.info, ri.typ)
-  result[1].add newSymNode(getSysMagic(g, ri.info, "move", mMove))
-  result[1].add ri
+  if g.config.selectedGC in {gcArc, gcAtomicArc, gcOrc}:
+    result[1].add newSymNode(getCompilerProc(g, "internalMove"))
+    result[1].add ri
+    result = newTreeI(nkStmtList, le.info, result,
+            newTree(nkCall, newSymNode(
+              getSysMagic(g, ri.info, "=wasMoved", mWasMoved)),
+              ri
+              ))
+  else:
+    result[1].add newSymNode(getSysMagic(g, ri.info, "move", mMove))
+    result[1].add ri
 
 proc lowerTupleUnpacking*(g: ModuleGraph; n: PNode; idgen: IdGenerator; owner: PSym): PNode =
   assert n.kind == nkVarTuple
@@ -226,15 +235,20 @@ proc lookupInRecord(n: PNode, id: ItemId): PSym =
         if result != nil: return
       else: discard
   of nkSym:
-    if n.sym.itemId.module == id.module and n.sym.itemId.item == -abs(id.item): result = n.sym
+    # if n.sym.itemId.module == id.module and n.sym.itemId.item == -abs(id.item): result = n.sym
+    if n.sym.name.s == $id.item: result = n.sym
   else: discard
 
 proc addField*(obj: PType; s: PSym; cache: IdentCache; idgen: IdGenerator): PSym =
   # because of 'gensym' support, we have to mangle the name with its ID.
   # This is hacky but the clean solution is much more complex than it looks.
-  var field = newSym(skField, getIdent(cache, s.name.s & $obj.n.len),
+  # var field = newSym(skField, getIdent(cache, s.name.s & $obj.n.len),
+  #                    idgen, s.owner, s.info, s.options)
+  var field = newSym(skField, getIdent(cache, $s.itemId.item),
                      idgen, s.owner, s.info, s.options)
-  field.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
+  field.itemId.module = s.itemId.module
+  # field.name = getIdent(cache, s.name.s & $s.itemId.item)
+  # field.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
   let t = skipIntLit(s.typ, idgen)
   field.typ = t
   assert t.kind != tyTyped
@@ -245,13 +259,17 @@ proc addField*(obj: PType; s: PSym; cache: IdentCache; idgen: IdGenerator): PSym
   obj.n.add newSymNode(field)
   fieldCheck()
   result = field
+  writeStackTrace()
 
 proc addUniqueField*(obj: PType; s: PSym; cache: IdentCache; idgen: IdGenerator): PSym {.discardable.} =
   result = lookupInRecord(obj.n, s.itemId)
   if result == nil:
-    var field = newSym(skField, getIdent(cache, s.name.s & $obj.n.len), idgen,
+    # var field = newSym(skField, getIdent(cache, s.name.s & $obj.n.len), idgen,
+    #                    s.owner, s.info, s.options)
+    # field.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
+    var field = newSym(skField, getIdent(cache, $s.itemId.item), idgen,
                        s.owner, s.info, s.options)
-    field.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
+    field.itemId.module = s.itemId.module
     let t = skipIntLit(s.typ, idgen)
     field.typ = t
     assert t.kind != tyTyped

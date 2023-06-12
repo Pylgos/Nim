@@ -46,9 +46,17 @@ proc generateCodeForModule(g: ModuleGraph; m: var LoadedModule; alive: var Alive
   bmod.flags.incl useAliveDataFromDce
   bmod.alive = move alive[m.module.position]
 
+  echo "generateCodeForModule: ", m.module.position
   for p in allNodes(m.fromDisk.topLevel):
     let n = unpackTree(g, m.module.position, m.fromDisk.topLevel, p)
     cgen.genTopLevelStmt(bmod, n)
+    # let pos = m.module.position
+    flush g.encoders[m.module.position], m.fromDisk
+    # while g.encoders[pos].pendingTypes.len > 0:
+    #   discard storeType(g.encoders[pos].pendingTypes.pop, g.encoders[pos], m.fromDisk)
+    # # if g.encoders[m.module.position].pendingSyms.len > 0 or g.encoders[m.module.position].pendingTypes.len > 0:
+    #   echo "flush ", m.module.position
+    #   ic.flush g.encoders[m.module.position], g.packed[m.module.position].fromDisk
 
   let disps = finalCodegenActions(g, bmod, newNodeI(nkStmtList, m.module.info))
   if disps != nil:

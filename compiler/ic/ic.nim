@@ -16,6 +16,8 @@ from os import removeFile, isAbsolute
 
 import ../../dist/checksums/src/checksums/sha1
 
+import ../astalgo
+
 when defined(nimPreviewSlimSystem):
   import std/[syncio, assertions, formatfloat]
 
@@ -263,9 +265,9 @@ proc addCompilerProc*(c: var PackedEncoder; m: var PackedModule; s: PSym) =
 
 proc toPackedNode*(n: PNode; ir: var PackedTree; c: var PackedEncoder; m: var PackedModule)
 proc storeSym*(s: PSym; c: var PackedEncoder; m: var PackedModule): PackedItemId
-proc storeType(t: PType; c: var PackedEncoder; m: var PackedModule): PackedItemId
+proc storeType*(t: PType; c: var PackedEncoder; m: var PackedModule): PackedItemId
 
-proc flush(c: var PackedEncoder; m: var PackedModule) =
+proc flush*(c: var PackedEncoder; m: var PackedModule) =
   ## serialize any pending types or symbols from the context
   while true:
     if c.pendingTypes.len > 0:
@@ -326,6 +328,12 @@ proc storeTypeLater(t: PType; c: var PackedEncoder; m: var PackedModule): Packed
   # we only write one tree into m.bodies after the other.
   if t.isNil: return nilItemId
 
+  # if t.uniqueId.module == 31 and t.uniqueId.item == 21:
+  #   echo c.thisModule
+  #   debug(t)
+  #   writeStackTrace()
+    # echo typeToString(t)
+
   assert t.uniqueId.module >= 0
   assert t.uniqueId.item > 0
   result = PackedItemId(module: toLitId(t.uniqueId.module.FileIndex, c, m), item: t.uniqueId.item)
@@ -336,7 +344,7 @@ proc storeTypeLater(t: PType; c: var PackedEncoder; m: var PackedModule): Packed
 proc storeSymLater(s: PSym; c: var PackedEncoder; m: var PackedModule): PackedItemId =
   if s.isNil: return nilItemId
   assert s.itemId.module >= 0
-  assert s.itemId.module >= 0
+  assert s.itemId.item >= 0
   result = PackedItemId(module: toLitId(s.itemId.module.FileIndex, c, m), item: s.itemId.item)
   if s.itemId.module == c.thisModule:
     # the sym belongs to this module, so serialize it here, eventually.
@@ -346,9 +354,17 @@ proc storeType(t: PType; c: var PackedEncoder; m: var PackedModule): PackedItemI
   ## serialize a ptype
   if t.isNil: return nilItemId
 
+  # if t.uniqueId.module == 31 and t.uniqueId.item == 21:
+  #   echo c.thisModule
+  #   debug(t)
+  #   writeStackTrace()
+
   assert t.uniqueId.module >= 0
   assert t.uniqueId.item > 0
   result = PackedItemId(module: toLitId(t.uniqueId.module.FileIndex, c, m), item: t.uniqueId.item)
+
+  # if t.uniqueId.module == 31 and t.uniqueId.item == 21:
+  #   debug(t)
 
   if t.uniqueId.module == c.thisModule and not c.typeMarker.containsOrIncl(t.uniqueId.item):
     if t.uniqueId.item >= m.types.len:
@@ -368,6 +384,8 @@ proc storeType(t: PType; c: var PackedEncoder; m: var PackedModule): PackedItemI
 
     # fill the reserved slot, nothing else:
     m.types[t.uniqueId.item] = p
+    # if t.uniqueId.module == 31 and t.uniqueId.item == 21:
+    #   echo "stored ", t.uniqueId.item, " ", m.types.len
 
 proc toPackedLib(l: PLib; c: var PackedEncoder; m: var PackedModule): PackedLib =
   ## the plib hangs off the psym via the .annex field
@@ -445,6 +463,9 @@ proc toPackedNode*(n: PNode; ir: var PackedTree; c: var PackedEncoder; m: var Pa
     if n.sym.itemId.module == c.thisModule:
       # it is a symbol that belongs to the module we're currently
       # packing:
+      # if n.sym.itemId.item < 0:
+      #   echo n.sym.itemId.item
+      #   echo n.sym.name.s
       let id = n.sym.storeSymLater(c, m).item
       ir.nodes.add PackedNode(kind: nkSym, flags: n.flags, operand: id,
                               typeId: storeTypeLater(n.typ, c, m), info: info)
@@ -884,7 +905,7 @@ proc loadSym(c: var PackedDecoder; g: var PackedModuleGraph; thisModule: int; s:
     assert g[si].status in {loaded, storing, stored}
     if not g[si].symsInit:
       g[si].symsInit = true
-      setLen g[si].syms, g[si].fromDisk.syms.len
+    setLen g[si].syms, g[si].fromDisk.syms.len
 
     if g[si].syms[s.item] == nil:
       if g[si].fromDisk.syms[s.item].kind != skModule:
@@ -932,7 +953,10 @@ proc loadType(c: var PackedDecoder; g: var PackedModuleGraph; thisModule: int; t
 
     if not g[si].typesInit:
       g[si].typesInit = true
-      setLen g[si].types, g[si].fromDisk.types.len
+    setLen g[si].types, g[si].fromDisk.types.len
+
+    if thisModule == 31 and t.item == 21:
+      echo thisModule, " ", si, " ", t.item, " ", g[si].types.len
 
     if g[si].types[t.item] == nil:
       result = typeHeaderFromPacked(c, g, g[si].fromDisk.types[t.item], si, t.item)

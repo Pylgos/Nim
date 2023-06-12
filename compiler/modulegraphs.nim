@@ -535,6 +535,7 @@ proc closeRodFile*(g: ModuleGraph; m: PSym) =
     saveRodFile(toRodFile(g.config, AbsoluteFile toFullPath(g.config, FileIndex(mint))),
                 g.encoders[mint], g.packed[mint].fromDisk)
     g.packed[mint].status = stored
+    echo "saved ", mint
 
   elif g.config.symbolFiles == stressTest:
     # debug code, but maybe a good idea for production? Could reduce the compiler's
@@ -542,6 +543,8 @@ proc closeRodFile*(g: ModuleGraph; m: PSym) =
     let mint = m.position
     simulateCachedModule(g, m, g.packed[mint].fromDisk)
     g.packed[mint].status = loaded
+  else:
+    echo "not saved ", m.position
 
 proc dependsOn(a, b: int): int {.inline.} = (a shl 15) + b
 

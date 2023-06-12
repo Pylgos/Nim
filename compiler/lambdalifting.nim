@@ -423,6 +423,8 @@ proc addClosureParam(c: var DetectionPass; fn: PSym; info: TLineInfo) =
     cp.typ = t
     addHiddenParam(fn, cp)
   elif cp.typ != t and fn.kind != skIterator:
+    debug(cp.typ)
+    debug(t)
     localError(c.graph.config, fn.info, "internal error: inconsistent environment type")
   #echo "adding closure to ", fn.name.s
 
@@ -451,10 +453,12 @@ proc detectCapturedVars(n: PNode; owner: PSym; c: var DetectionPass) =
         if interestingIterVar(s):
           if not c.capturedVars.containsOrIncl(s.id):
             let obj = getHiddenParam(c.graph, owner).typ.skipTypes({tyOwned, tyRef, tyPtr})
-            #let obj = c.getEnvTypeForOwner(s.owner).skipTypes({tyOwned, tyRef, tyPtr})
+            # let obj = c.getEnvTypeForOwner(ow, n.info).skipTypes({tyOwned, tyRef, tyPtr})
 
             if s.name.id == getIdent(c.graph.cache, ":state").id:
-              obj.n[0].sym.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
+              obj.n[0].sym.name = getIdent(c.graph.cache, $s.itemId.item)
+              # obj.n[0].sym.name = getIdent(c.graph.cache, ":state" & $s.itemId.item)
+              # obj.n[0].sym.itemId = ItemId(module: s.itemId.module, item: -s.itemId.item)
             else:
               discard addField(obj, s, c.graph.cache, c.idgen)
     # direct or indirect dependency:
