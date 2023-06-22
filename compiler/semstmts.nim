@@ -2014,6 +2014,21 @@ proc semMethodPrototype(c: PContext; s: PSym; n: PNode) =
     else:
       localError(c.config, n.info, "'method' needs a parameter that has an object type")
 
+proc collectRoutinesToAttachToGenericProc(c: PContext): seq[PSym] =
+  result.add c.converters
+  let routines = ["()", ".", ".()", ".="]
+  for routine in routines:
+    let n = newIdentNode(getIdent(c.cache, routine), unknownLineInfo)
+    var
+      o: TOverloadIter
+      a = initOverloadIter(o, c, n)
+    while a != nil:
+      if a.kind in routineKinds:
+        incl(a.flags, sfUsed)
+        markOwnerModuleAsUsed(c, a)
+        result.add a
+      a = nextOverloadIter(o, c, n)
+
 proc semProcAux(c: PContext, n: PNode, kind: TSymKind,
                 validPragmas: TSpecialWords, flags: TExprFlags = {}): PNode =
   result = semProcAnnotation(c, n, validPragmas)
@@ -2281,6 +2296,7 @@ proc semProcAux(c: PContext, n: PNode, kind: TSymKind,
         openScope(c)
         n[bodyPos] = semGenericStmt(c, n[bodyPos])
         closeScope(c)
+        n[namePos].sym.attachedRoutines = collectRoutinesToAttachToGenericProc(c)
         if s.magic == mNone:
           fixupInstantiatedSymbols(c, s)
       if s.kind == skMethod: semMethodPrototype(c, s, n)

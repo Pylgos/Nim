@@ -889,6 +889,7 @@ type
       #procInstCache*: seq[PInstantiation]
       gcUnsafetyReason*: PSym  # for better error messages regarding gcsafe
       transformedBody*: PNode  # cached body after transf pass
+      attachedRoutines*: seq[PSym]
     of skLet, skVar, skField, skForVar:
       guard*: PSym
       bitsize*: int

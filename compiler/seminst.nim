@@ -318,7 +318,23 @@ proc fillMixinScope(c: PContext) =
     for bnd in p.localBindStmts:
       for n in bnd:
         addSym(c.currentScope, n.sym)
+        # debug(n)
     p = p.next
+
+proc openAttachedRoutineScope(c: PContext, fn: PSym): int =
+  # echo fn.attachedRoutines
+  openScope(c)
+  result = c.converters.len
+  for sym in fn.attachedRoutines:
+    if sym.kind == skConverter:
+      if c.converters.find(sym) == -1:
+        c.converters.add sym
+    else:
+      addSym(c.currentScope, sym)
+
+proc closeAttachedRoutineScope(c: PContext, origConvertersLen: int) =
+  c.converters.setLen origConvertersLen
+  closeScope(c)
 
 proc generateInstance(c: PContext, fn: PSym, pt: TIdTable,
                       info: TLineInfo): PSym =
@@ -349,6 +365,9 @@ proc generateInstance(c: PContext, fn: PSym, pt: TIdTable,
   # mixin scope:
   openScope(c)
   fillMixinScope(c)
+
+  # attached routines scope:
+  let origConvertersLen = openAttachedRoutineScope(c, fn)
 
   openScope(c)
   let gp = n[genericParamsPos]
@@ -399,6 +418,7 @@ proc generateInstance(c: PContext, fn: PSym, pt: TIdTable,
   popProcCon(c)
   popInfoContext(c.config)
   closeScope(c)           # close scope for parameters
+  closeAttachedRoutineScope(c, origConvertersLen) # close scope for attached routines
   closeScope(c)           # close scope for 'mixin' declarations
   popOwner(c)
   c.currentScope = oldScope
